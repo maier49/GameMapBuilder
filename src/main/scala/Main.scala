@@ -1,11 +1,7 @@
-package Scala
-
-
+package main.scala
 import swing._
 import java.awt.{Dimension, Color, Graphics}
-import main.scala.gameController.AreaMap
-import main.scala.geometry.SimpleVector
-import scala.swing.Dimension
+import main.scala.mapbuilder.{MapBuilderPanel, MapEditPanel}
 
 /**
  * A Simple UI for building maps
