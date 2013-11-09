@@ -5,6 +5,7 @@ import main.scala.GameConstants._
 import main.scala.gameObjects.entity.classes.{CharacterEntity, Entity}
 import scala.swing.event.{KeyReleased, Key, KeyPressed}
 import main.scala.gameControl.AreaMap
+import java.util.UUID
 
 /**
  * Created with IntelliJ IDEA.
@@ -14,6 +15,8 @@ import main.scala.gameControl.AreaMap
  * To change this template use File | Settings | File Templates.
  */
 class DefaultEventHandler extends EventHandler {
+
+  var lastMapFile: String = ""
 
   override def handleEvents(display: ScalaPane, party: List[CharacterEntity]) {
     if (display.map.isInstanceOf[AreaMap])
@@ -32,10 +35,28 @@ class DefaultEventHandler extends EventHandler {
   def handleEvent(event: MyEvent, display: ScalaPane, party: List[CharacterEntity]) {
     event match {
       case (keyEvent: MyKeyEvent) => handleKeyEvent(keyEvent, party)
+      case (mapChangeEvent: ChangeMapEvent) => handleChangeMapEvent(mapChangeEvent, party, display)
       case _ =>
     }
   }
 
+  def handleChangeMapEvent(changeMapEvent: ChangeMapEvent, party: List[CharacterEntity], display: ScalaPane) {
+
+
+    if (display.map.isInstanceOf[AreaMap]) {
+      lastMapFile = UUID.randomUUID().toString
+      AreaMap.exportToJson("src/main/resources/map/" + lastMapFile, display.map.asInstanceOf[AreaMap])
+    }
+
+
+    display.map = changeMapEvent.mapLoader()
+    if (display.map.isInstanceOf[AreaMap]) {
+      for (character <- party) {
+        character.location = display.map.asInstanceOf[AreaMap].startPosition
+        display.map.asInstanceOf[AreaMap].foreground.put(character.id, character)
+      }
+    }
+  }
 
   def handleKeyEvent(keyEvent: MyKeyEvent, party: List[CharacterEntity]) {
     keyEvent.swingKeyPressEvent match {

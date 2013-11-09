@@ -19,54 +19,54 @@ import main.scala.geometry.SimpleVector
  * To change this template use File | Settings | File Templates.
  */
 object ImageUtil {
-  def drawImage(image: Image, location: SimpleVector, targetImage: Image): Boolean = {
-    val success = targetImage.getGraphics.drawImage(image, location.x, targetImage.getHeight(null) - location.y, null)
-    targetImage.getGraphics.dispose()
+  def drawImage(image: Image, location: SimpleVector, graphics: Graphics, targetHeight: Int): Boolean = {
+    val success = graphics.drawImage(image, location.x, targetHeight - location.y, null)
     success
   }
 
-  def drawImages(images: List[Image], locations: List[SimpleVector], targetImage: Image): Boolean = {
+
+  def drawImages(images: List[Image], locations: List[SimpleVector], graphics: Graphics, targetHeight: Int): Boolean = {
     if (images.isEmpty)
       false
     else {
-      val graphics = targetImage.getGraphics
       val success = for ((image, location) <- images zip locations) yield {
-        graphics.drawImage(image, location.x, targetImage.getHeight(null) - location.y, null) || image.isInstanceOf[ToolkitImage]
+        graphics.drawImage(image, location.x, targetHeight - location.y, null) || image.isInstanceOf[ToolkitImage]
       }
-
-      graphics.dispose()
       success.reduceLeft(_ && _)
     }
   }
 
-  def drawRectangles(rectangles: List[Rect], targetImage: Image): Boolean = {
+  def drawRectangles(rectangles: List[Rect], graphics: Graphics, targetHeight: Int, color: Color = Color.BLACK): Boolean = {
     if (rectangles.isEmpty)
       false
     else {
-      val graphics = targetImage.getGraphics
-      val oldStroke = if (graphics.isInstanceOf[Graphics2D])
-        Some(graphics.asInstanceOf[Graphics2D].getStroke)
+      val oldGraphics = if (graphics.isInstanceOf[Graphics2D])
+        Some(
+          graphics.asInstanceOf[Graphics2D].getColor,
+          graphics.asInstanceOf[Graphics2D].getStroke
+        )
       else
         None
 
-      for (stroke <- oldStroke) {
+
+      for (exists <- oldGraphics) {
         graphics.asInstanceOf[Graphics2D].setStroke(new BasicStroke(5f))
-        graphics.setColor(Color.BLACK)
+        graphics.setColor(color)
       }
       for (rectangle <- rectangles)
         graphics.drawRect(
           rectangle.topLeft.x,
-          targetImage.getHeight(null) - rectangle.topLeft.y,
+          targetHeight - rectangle.topLeft.y,
           rectangle.bottomRight.x - rectangle.topLeft.x,
-         rectangle.topLeft.y - rectangle.bottomRight.y
+          rectangle.topLeft.y - rectangle.bottomRight.y
         )
 
 
-      for (stroke <- oldStroke) {
-        graphics.asInstanceOf[Graphics2D].setStroke(stroke)
+      for (original <- oldGraphics) {
+        graphics.asInstanceOf[Graphics2D].setStroke(original._2)
+        graphics.asInstanceOf[Graphics2D].setColor(original._1)
       }
 
-      graphics.dispose()
       true
     }
   }

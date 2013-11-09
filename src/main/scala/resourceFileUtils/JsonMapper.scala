@@ -26,6 +26,8 @@ object JsonMapper {
     entity match {
       case (wall: Wall) => toJson(wall)
       case (scenery: Scenery) => toJson(scenery)
+      case (character: CharacterEntity) => toJson(character)
+
     }
   }
 
@@ -72,6 +74,10 @@ object JsonMapper {
       toJson(SimpleVector(wall.boundary.right - wall.boundary.left, wall.boundary.top - wall.boundary.bottom))) ::
       (AreaMapFileKeys.VectorType.Location, toJson(wall.location)) :: Nil)
 
+    if (wall.isInstanceOf[Door]) {
+      hashMap += ((AreaMapFileKeys.MapName, wall.asInstanceOf[Door].mapName))
+    }
+
     if (wall.isInstanceOf[VisibleWall]) {
       hashMap ++:= toJson(wall.asInstanceOf[VisibleWall].imageRef).obj
     } else {
@@ -95,6 +101,7 @@ object JsonMapper {
         (AreaMapFileKeys.CharacterEntityKeys.RunSpeed, character.runSpeed.toString) ::
         (AreaMapFileKeys.CharacterEntityKeys.WalkSpeed, character.walkSpeed.toString) ::
         (AreaMapFileKeys.ImageFileKey, character.playerImageId) ::
+        (AreaMapFileKeys.ImageType, "") ::
         Nil
       )
     new JSONObject(hashMap)

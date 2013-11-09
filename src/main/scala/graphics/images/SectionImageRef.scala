@@ -1,7 +1,7 @@
 package main.scala.graphics.images
 
 import main.scala.geometry.SimpleVector
-import java.awt.Image
+import java.awt.{Graphics, Image}
 import java.awt.image.BufferedImage
 import sun.awt.image.ToolkitImage
 
@@ -25,5 +25,25 @@ case class SectionImageRef(imageId: String, upperLeft: SimpleVector, bottomRight
     imageOption.getOrElse(new BufferedImage(0,0,BufferedImage.TYPE_INT_RGB))
 
 
+  }
+
+  override def draw(graphics: Graphics, location: SimpleVector) {
+    val width = bottomRight.x - upperLeft.x
+    val height = upperLeft.y - bottomRight.y
+    for (storedImage <- imageStore.getImage(imageId)) yield {
+
+      graphics.drawImage(
+        storedImage,
+        location.x,
+        location.y,
+        location.x + width,
+        location.y + height,
+        upperLeft.x,
+        storedImage.getHeight(null) - upperLeft.y,
+        bottomRight.x,
+        storedImage.getHeight(null) - bottomRight.y,
+        null
+      )
+    }
   }
 }

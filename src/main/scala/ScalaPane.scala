@@ -7,6 +7,7 @@ import main.scala.gameControl.events.{MyKeyEvent, EventQueue}
 import scala.swing.event.KeyEvent
 import scala.swing.{MainFrame, Panel}
 import main.scala.gameControl.events.MyKeyEvent
+import main.scala.geometry.SimpleVector
 
 
 /**
@@ -43,14 +44,12 @@ class ScalaPane(var map : GameScreen) extends Panel {
 
   override def paintComponent(graphics : Graphics2D) {
     super.paintComponent(graphics)
-    val image = map.draw
-    graphics.drawImage(image, 0,0, null)
+    val image = map.draw(graphics, SimpleVector(WIDE, HIGH))
   }
 
   override def paint(graphics : Graphics2D) {
     super.paint(graphics)
-    val image = map.draw
-    graphics.drawImage(image, 0,0, null)
+    val image = map.draw(graphics, SimpleVector(WIDE, HIGH))
   }
 
 }

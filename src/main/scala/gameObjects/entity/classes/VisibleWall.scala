@@ -4,6 +4,7 @@ import main.scala.geometry.SimpleVector
 import main.scala.graphics.images.MyImageRef
 import java.util.UUID
 import main.scala.gameObjects.entity.traits.Visible
+import java.awt.Graphics
 
 /**
  * Created with IntelliJ IDEA.
@@ -14,6 +15,9 @@ import main.scala.gameObjects.entity.traits.Visible
  */
 class VisibleWall(myLoc: SimpleVector, dim: SimpleVector, val imageRef: MyImageRef, entityId: String = UUID.randomUUID().toString) extends Wall(myLoc, dim, entityId) with Visible {
   override def image = imageRef.image
+  override def draw(graphics: Graphics, adjustedLocation: SimpleVector) {
+    imageRef.draw(graphics, adjustedLocation)
+  }
   val _height = image.getHeight(null)
   val _width = image.getWidth(null)
 

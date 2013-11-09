@@ -9,7 +9,7 @@ package main.scala.gameControl
  */
 
 import main.scala.geometry.{Rect, RealVector, SimpleVector}
-import java.awt.{Image, Graphics}
+import java.awt.{Color, Image, Graphics}
 import scala.collection.mutable
 import java.awt.image.{RenderedImage, BufferedImage}
 import main.scala.resourceFileUtils.{JsonMapper, AreaMapFileKeys}
@@ -48,9 +48,8 @@ import scala.util.parsing.json.JSONObject
 import main.scala.geometry.SimpleVector
 
 
-class AreaMap(var resolution: SimpleVector = SimpleVector(800, 600))(var center: SimpleVector = resolution / 2, val startPosition: SimpleVector = resolution * 3 / 4) extends GameScreen {
+class AreaMap(var center: SimpleVector = SimpleVector(0, 0), var startPosition: SimpleVector = SimpleVector(0, 0)) extends GameScreen {
 
-  var originOfVisibleArea = center - (resolution / 2)
 
   val background: mutable.HashMap[String, Entity] = new mutable.HashMap[String, Entity]()
 
@@ -62,19 +61,18 @@ class AreaMap(var resolution: SimpleVector = SimpleVector(800, 600))(var center:
   var drawForeGround: Boolean = true
   var drawOverlay: Boolean = true
   var drawWalls: Boolean = false
+  var drawStartingPoint: Boolean = false
+  var drawDoors: Boolean = false
 
   def moveViewTo(point: SimpleVector) {
     center = point
-    originOfVisibleArea = center - (resolution / 2)
   }
 
   def moveViewBy(dist: SimpleVector) {
     center = center + dist
-    originOfVisibleArea = center - (resolution / 2)
   }
 
-  override def draw: Image = {
-    val baseImage = new BufferedImage(resolution.x, resolution.y, BufferedImage.TYPE_INT_ARGB)
+  override def draw(graphics: Graphics, resolution: SimpleVector) {
     val visibleEntities = {
       (if (drawBackGround) background.values else Nil) ++
         (if (drawForeGround) foreground.values else Nil) ++
@@ -86,11 +84,13 @@ class AreaMap(var resolution: SimpleVector = SimpleVector(800, 600))(var center:
       case _ =>
         Nil
     })
-    val adjustedPositionsAndImages = visibleEntities.map(entity => {
-      for (position <- getAdjustedPosition(entity.location, entity.width, entity.height)) yield
-        (position, entity.image)
-    }).flatten
-    ImageUtil.drawImages(adjustedPositionsAndImages.map(_._2).toList, adjustedPositionsAndImages.map(_._1).toList, baseImage)
+    for {entity <- visibleEntities
+         position <- getAdjustedPosition(entity.location, entity.width, entity.height, resolution)}
+      entity.draw(graphics, SimpleVector(position.x, resolution.y - position.y))
+
+
+
+
 
     if (drawWalls) {
       val walls = {
@@ -103,13 +103,36 @@ class AreaMap(var resolution: SimpleVector = SimpleVector(800, 600))(var center:
         case _ => Nil
       })
       val adjustedRects = walls.map(wall => {
-        wall.boundary - originOfVisibleArea
+        wall.boundary - (center - resolution / 2)
       })
 
-      ImageUtil.drawRectangles(adjustedRects.toList, baseImage)
+      ImageUtil.drawRectangles(adjustedRects.toList, graphics, resolution.y)
 
     }
-    baseImage
+
+    if (drawStartingPoint) {
+      ImageUtil.drawRectangles(List(Rect(
+        startPosition + SimpleVector(-10, 10),
+        startPosition + SimpleVector(10, -10))
+      ), graphics, resolution.y, Color.BLUE)
+    }
+
+    if (drawDoors) {
+      val doors = {
+        (if (drawBackGround) background.values else Nil) ++
+          (if (drawForeGround) foreground.values else Nil) ++
+          (if (drawOverlay) overlay.values else Nil)
+
+      }.flatMap(_ match {
+        case door: Door => door :: Nil
+        case _ => Nil
+      })
+      val adjustedRects = doors.map(door => {
+        door.boundary - (center - resolution / 2)
+      })
+
+      ImageUtil.drawRectangles(adjustedRects.toList, graphics, resolution.y, Color.GREEN)
+    }
   }
 
 
@@ -143,9 +166,8 @@ class AreaMap(var resolution: SimpleVector = SimpleVector(800, 600))(var center:
     //we can't resolve
     if (movingEntity.isInstanceOf[Colliding]) {
       val handleCollisionEntities =
-        for {otherEntity <- collidingEntities if (!(movingEntity == otherEntity))} yield
-          if (movingEntity.asInstanceOf[Colliding].checkForAndHandleCollision(otherEntity))
-            otherEntity
+        for {otherEntity <- collidingEntities if (!(movingEntity == otherEntity) && movingEntity.asInstanceOf[Colliding].checkForAndHandleCollision(otherEntity))} yield
+          otherEntity
       if (handleCollisionEntities.size > 0)
         moveAndHandleCollisions(movingEntity.asInstanceOf[Colliding], handleCollisionEntities.asInstanceOf[List[Colliding]], 1)
     }
@@ -163,15 +185,14 @@ class AreaMap(var resolution: SimpleVector = SimpleVector(800, 600))(var center:
     //If we loop more than 10 times through the list just give up and log whatever
     //we can't resolve
     val handleCollisionEntities =
-      for {otherEntity <- collidingEntities if (!(movingEntity == otherEntity))} yield
-        if (movingEntity.checkForAndHandleCollision(otherEntity))
-          otherEntity
+      for {otherEntity <- collidingEntities if (!(movingEntity == otherEntity) && movingEntity.asInstanceOf[Colliding].checkForAndHandleCollision(otherEntity))} yield
+        otherEntity
     if (handleCollisionEntities.size > 0)
       moveAndHandleCollisions(movingEntity, handleCollisionEntities.asInstanceOf[List[Colliding]], attempts + 1)
   }
 
-  private def getAdjustedPosition(point: SimpleVector, width: Int, height: Int): Option[SimpleVector] = {
-    val adjustedPosition = point - originOfVisibleArea
+  private def getAdjustedPosition(point: SimpleVector, width: Int, height: Int, resolution: SimpleVector): Option[SimpleVector] = {
+    val adjustedPosition = point - (center - resolution / 2)
     if (
       Rect(
         SimpleVector(adjustedPosition.x, adjustedPosition.y),
@@ -210,17 +231,13 @@ object AreaMap {
       Source.fromFile(filePath + AreaMapFileKeys.MapDataFile).getLines
     else
       Source.fromFile(filePath).getLines
-    val areaMap = new AreaMap()()
+    val areaMap = new AreaMap()
 
     for {line <- lines
          jsonObject <- util.parsing.json.JSON.parseRaw(line)
     } jsonObject match {
       case (mapJson: JSONObject) => {
 
-        areaMap.resolution = getSimpleVectorFromJson(mapJson, Resolution) match {
-          case Some(res: SimpleVector) => res
-          case _ => areaMap.resolution
-        }
         areaMap.center = getSimpleVectorFromJson(mapJson, Center) match {
           case Some(center: SimpleVector) => center
           case _ => areaMap.center
@@ -231,11 +248,21 @@ object AreaMap {
           case _ =>
         }
 
-        mapJson.obj.get(AreaMapFileKeys.Wall) match {
-          case Some(entitiesJson: JSONArray) => fillEntities(entitiesJson, areaMap, AreaMapFileKeys.Wall, pathToResources)
+        mapJson.obj.get(AreaMapFileKeys.Walls) match {
+          case Some(entitiesJson: JSONArray) => fillEntities(entitiesJson, areaMap, AreaMapFileKeys.Walls, pathToResources)
           case _ =>
         }
 
+        mapJson.obj.get(AreaMapFileKeys.Characters) match {
+          case Some(entitiesJson: JSONArray) => fillEntities(entitiesJson, areaMap, AreaMapFileKeys.Characters, pathToResources)
+          case _ =>
+        }
+
+
+        mapJson.obj.get(AreaMapFileKeys.Doors) match {
+          case Some(entitiesJson: JSONArray) => fillEntities(entitiesJson, areaMap, AreaMapFileKeys.Doors, pathToResources)
+          case _ =>
+        }
       }
       case _ =>
     }
@@ -297,8 +324,7 @@ object AreaMap {
         case _ => None
       }
 
-
-      case AreaMapFileKeys.Wall =>
+      case AreaMapFileKeys.Walls =>
         for {size <- getSimpleVectorFromJson(entityJson, VectorType.Size)
              entityId <- entityJson.obj.get(EntityId)
              if (entityId.isInstanceOf[String])} yield
@@ -307,24 +333,34 @@ object AreaMap {
               new VisibleWall(location, size, TiledImageRef(size.x, size.y, fileName, imageStore), entityId.asInstanceOf[String])
             case ImageTypeVal.SimpleImage => new VisibleWall(location, size, SimpleImageRef(fileName, imageStore), entityId.asInstanceOf[String])
             case AreaMapFileKeys.NoImage => new Wall(location, size, entityId.asInstanceOf[String])
-
           }
 
-      case AreaMapFileKeys.Character =>
+      case AreaMapFileKeys.Characters =>
         for {entityId <- entityJson.obj.get(EntityId) if (entityId.isInstanceOf[String])} yield {
           val character = new CharacterEntity(fileName)
           character.location = location
           character
         }
+
+      case AreaMapFileKeys.Doors =>
+        for {size <- getSimpleVectorFromJson(entityJson, VectorType.Size)
+             entityId <- entityJson.obj.get(EntityId)
+             mapName <- entityJson.obj.get(AreaMapFileKeys.MapName)
+             if (entityId.isInstanceOf[String])
+             if (mapName.isInstanceOf[String])} yield
+          new Door(location, size, mapName.asInstanceOf[String], entityId.asInstanceOf[String])
+
+
       case _ => None
     }
 
   }
 
   def getSimpleVectorFromJson(json: JSONObject, key: String): Option[SimpleVector] = {
-    for {jsonVector <- json.obj.get(key)
-         if (jsonVector.isInstanceOf[JSONObject])
-         simpleVector <- JsonMapper.simpleVectorFromJson(jsonVector.asInstanceOf[JSONObject])
+    for {
+      jsonVector <- json.obj.get(key)
+      if (jsonVector.isInstanceOf[JSONObject])
+      simpleVector <- JsonMapper.simpleVectorFromJson(jsonVector.asInstanceOf[JSONObject])
     } yield simpleVector
   }
 
@@ -352,92 +388,47 @@ object AreaMap {
 
     }
     val output = new BufferedWriter(new FileWriter(fileName + AreaMapFileKeys.MapDataFile))
-    output.write(new JSONObject(
-      new HashMap[String, Any] + ((Resolution, JsonMapper.toJson(areaMap.resolution)))
-    ).toString() + "\n")
 
     output.write(new JSONObject(
       new HashMap[String, Any] + ((Center, JsonMapper.toJson(areaMap.center)))
     ).toString() + "\n")
 
+
     //Export Background entities
-    output.write(new JSONObject(
-      new HashMap[String, Any] + ((AreaMapFileKeys.Scenery, new JSONArray(
-        areaMap.background.values.toList.flatMap {
-          _ match {
-            case (scenery: Scenery) =>
-              JsonMapper.toJson(scenery, AreaMapFileKeys.LayerVal.Background) :: Nil
-            case _ => Nil
-          }
-        }
-      )))
-    ).toString() + "\n")
-
-    output.write(new JSONObject(
-      new HashMap[String, Any] + ((AreaMapFileKeys.Wall, new JSONArray(
-        areaMap.background.values.toList.flatMap {
-          _ match {
-            case (wall: Wall) =>
-              JsonMapper.toJson(wall, AreaMapFileKeys.LayerVal.Background) :: Nil
-            case _ => Nil
-          }
-        }
-      )))
-    ).toString() + "\n")
-
-    //Export Foreground entities
-    output.write(new JSONObject(
-      new HashMap[String, Any] + ((AreaMapFileKeys.Scenery, new JSONArray(
-        areaMap.foreground.values.toList.flatMap {
-          _ match {
-            case (scenery: Scenery) =>
-              JsonMapper.toJson(scenery, AreaMapFileKeys.LayerVal.Foreground) :: Nil
-            case _ => Nil
-          }
-        }
-      )))
-    ).toString() + "\n")
-
-    output.write(new JSONObject(
-      new HashMap[String, Any] + ((AreaMapFileKeys.Wall, new JSONArray(
-        areaMap.foreground.values.toList.flatMap {
-          _ match {
-            case (wall: Wall) =>
-              JsonMapper.toJson(wall, AreaMapFileKeys.LayerVal.Foreground) :: Nil
-            case _ => Nil
-          }
-        }
-      )))
-    ).toString() + "\n")
-
-    //Export Overlay Entities
-    output.write(new JSONObject(
-      new HashMap[String, Any] + ((AreaMapFileKeys.Scenery, new JSONArray(
-        areaMap.overlay.values.toList.flatMap {
-          _ match {
-            case (scenery: Scenery) =>
-              JsonMapper.toJson(scenery, AreaMapFileKeys.LayerVal.Overlay) :: Nil
-            case _ => Nil
-          }
-        }
-      )))
-    ).toString() + "\n")
-
-    output.write(new JSONObject(
-      new HashMap[String, Any] + ((AreaMapFileKeys.Wall, new JSONArray(
-        areaMap.overlay.values.toList.flatMap {
-          _ match {
-            case (wall: Wall) =>
-              JsonMapper.toJson(wall, AreaMapFileKeys.LayerVal.Overlay) :: Nil
-            case _ => Nil
-          }
-        }
-      )))
-    ).toString() + "\n")
-
-
+    output.write(getJsonForLayer(areaMap.background, AreaMapFileKeys.LayerVal.Background))
+    output.write(getJsonForLayer(areaMap.foreground, AreaMapFileKeys.LayerVal.Foreground))
+    output.write(getJsonForLayer(areaMap.overlay, AreaMapFileKeys.LayerVal.Overlay))
     output.flush()
     output.close()
+  }
+
+  def getEntitiesByTypeForLayer(map: mutable.HashMap[String, Entity], layer: String, entityType: String): String = {
+    val entityClass = entityType match {
+      case AreaMapFileKeys.Scenery => classOf[main.scala.gameObjects.entity.classes.Scenery]
+      case AreaMapFileKeys.Walls => classOf[Wall]
+      case AreaMapFileKeys.Doors => classOf[Door]
+      case AreaMapFileKeys.Characters => classOf[CharacterEntity]
+
+    }
+
+    new JSONObject(
+      new HashMap[String, Any] + ((entityType, new JSONArray(
+        map.values.toList.flatMap(
+          _ match {
+            case (entity: Any) if entity.getClass == entityClass =>
+              JsonMapper.toJson(entity, layer) :: Nil
+            case _ => Nil
+          }
+        )
+      )))
+    ).toString() + "\n"
+  }
+
+  def getJsonForLayer(map: mutable.HashMap[String, Entity], layer: String): String = {
+    getEntitiesByTypeForLayer(map, layer, AreaMapFileKeys.Characters) +
+      getEntitiesByTypeForLayer(map, layer, AreaMapFileKeys.Walls) +
+      getEntitiesByTypeForLayer(map, layer, AreaMapFileKeys.Doors) +
+      getEntitiesByTypeForLayer(map, layer, AreaMapFileKeys.Scenery)
   }
 
 }

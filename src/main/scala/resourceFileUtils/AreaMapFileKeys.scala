@@ -8,11 +8,11 @@ object AreaMapFileKeys {
 
 
 
-  val Resolution = "RESOLUTION"
   val Center = "CENTER"
   val Scenery = "SCENERY"
-  val Wall = "WALL"
-  val Character = "CHARACTER"
+  val Walls = "WALLS"
+  val Doors = "DOORS"
+  val Characters = "CHARACTERS"
   val NoImage = "NOIMAGE"
 
 
@@ -34,6 +34,7 @@ object AreaMapFileKeys {
   val MapDataFile = "/mapData.txt"
 
   val ImageFileKey = "IMAGEFILEKEY"
+  val MapName = "MAPNAME"
   val ImageType = "IMAGETYPE"
   val EntityId = "ENTITYID"
 

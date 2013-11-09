@@ -1,7 +1,7 @@
 package main.scala.mapbuilder
 
 import scala.swing.{Orientation, Label, ScrollPane, BorderPanel}
-import java.awt.{Image, Dimension}
+import java.awt.{GridLayout, Image, Dimension}
 import scala.swing.event._
 import java.util.UUID
 import main.scala.graphics.images.{TiledImageRef, SimpleImageRef, DefaultImageStore}
@@ -12,13 +12,20 @@ import scala.swing.event.MouseDragged
 import scala.swing.event.MouseReleased
 import main.scala.graphics.images.TiledImageRef
 import scala.collection.parallel.mutable
-import main.scala.gameObjects.entity.classes.{Entity, Scenery, Wall}
-import javax.swing.SwingUtilities
+import main.scala.gameObjects.entity.classes.{Door, Entity, Scenery, Wall}
+import javax.swing._
+import main.scala.geometry.Rect
+import scala.swing.event.MousePressed
+import main.scala.graphics.images.SimpleImageRef
+import scala.swing.event.MouseReleased
+import main.scala.graphics.images.TiledImageRef
+import main.scala.gameObjects.entity.classes.Scenery
+import main.scala.geometry.SimpleVector
 
 class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
   val DragThreshold = 10
   val editOptionsPanel = new EditOptionsPanel(map, Orientation.Vertical)
-  val optionsToolbar = new OptionsToolBar(map, editOptionsPanel.updateResolution :: Nil)
+  val optionsToolbar = new OptionsToolBar(map, Nil)
   private var pressedAt: SimpleVector = SimpleVector(0, 0)
   private var releasedAt: SimpleVector = SimpleVector(0, 0)
 
@@ -32,15 +39,18 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
 
   reactions += {
     case e: MousePressed =>
-      pressedAt = SimpleVector(e.peer.getX, map.areaMap.resolution.y - e.peer.getY)
+      pressedAt = SimpleVector(e.peer.getX, map.resolution.y - e.peer.getY)
     case e: MouseReleased =>
-      releasedAt = SimpleVector(e.peer.getX, map.areaMap.resolution.y - e.peer.getY)
-      editOptionsPanel.imagesOrWalls match {
-        case value if value == editOptionsPanel.AddWalls =>
-          if (SwingUtilities.isRightMouseButton(e.peer))
-            removeWallsFromMap()
-          else if (SwingUtilities.isLeftMouseButton(e.peer))
-            addWallToMap(releasedAt - pressedAt)
+      releasedAt = SimpleVector(e.peer.getX, map.resolution.y - e.peer.getY)
+
+      editOptionsPanel.drawWhat match {
+        case value if value == editOptionsPanel.AddWalls || value == editOptionsPanel.AddDoors =>
+          if (pressedAt.x != releasedAt.x && pressedAt.y != releasedAt.y) {
+            if (SwingUtilities.isRightMouseButton(e.peer))
+              removeWallsFromMap(editOptionsPanel.AddDoors == value)
+            else if (SwingUtilities.isLeftMouseButton(e.peer))
+              addWallToMap(releasedAt - pressedAt, editOptionsPanel.AddDoors == value)
+          }
         case value if value == editOptionsPanel.AddImages =>
           if (SwingUtilities.isLeftMouseButton(e.peer))
             for (selectedImagePanel <- optionsToolbar.imageSelection) {
@@ -48,21 +58,34 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
             }
           else if (SwingUtilities.isRightMouseButton(e.peer))
             removeImagesFromMap()
+        case value if value == editOptionsPanel.ChooseStartingPoint =>
+          map.areaMap.startPosition = pressedAt
       }
       repaint()
+
 
     case _ =>
   }
 
-  private def addWallToMap(dragVector: SimpleVector) {
-    if (dragVector.magnitude > DragThreshold)
-      (editOptionsPanel.selectedLayer match {
-        case value if value == editOptionsPanel.Background => map.areaMap.background
-        case value if value == editOptionsPanel.Foreground => map.areaMap.foreground
-        case value if value == editOptionsPanel.Overlay => map.areaMap.overlay
-        case _ => map.areaMap.background
-      }).put(
-        UUID.randomUUID().toString,
+  private def addWallToMap(dragVector: SimpleVector, door: Boolean = false) {
+    if (dragVector.magnitude > DragThreshold) {
+
+      val wall = if (door) {
+        //GetDoor
+        val doorText = getMapName()
+        new Door(
+          SimpleVector(
+            Math.min(releasedAt.x, pressedAt.x),
+            Math.min(releasedAt.y, pressedAt.y)
+          ),
+          SimpleVector(
+            Math.max(releasedAt.x, pressedAt.x) - Math.min(releasedAt.x, pressedAt.x),
+            Math.max(releasedAt.y, pressedAt.y) - Math.min(releasedAt.y, pressedAt.y)
+          ),
+          doorText,
+          UUID.randomUUID().toString
+        )
+      } else {
         new Wall(
           SimpleVector(
             Math.min(releasedAt.x, pressedAt.x),
@@ -74,7 +97,18 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
           ),
           UUID.randomUUID().toString
         )
+      }
+
+      (editOptionsPanel.selectedLayer match {
+        case value if value == editOptionsPanel.Background => map.areaMap.background
+        case value if value == editOptionsPanel.Foreground => map.areaMap.foreground
+        case value if value == editOptionsPanel.Overlay => map.areaMap.overlay
+        case _ => map.areaMap.background
+      }).put(
+        UUID.randomUUID().toString,
+        wall
       )
+    }
   }
 
   private def addImageToMap(image: Image, dragVector: SimpleVector) {
@@ -99,7 +133,7 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
     }
   }
 
-  def removeWallsFromMap() {
+  def removeWallsFromMap(doors: Boolean = false) {
 
     val dragBoundary = Rect(
       SimpleVector(Math.min(pressedAt.x, releasedAt.x), Math.max(pressedAt.y, releasedAt.y)),
@@ -111,7 +145,8 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
         val toRemove = map.areaMap.background.filter(
           (entry: (_, Entity)) => (
             (entry._2.isInstanceOf[Wall]) &&
-              (entry._2.asInstanceOf[Wall].boundary intersectsWith dragBoundary)
+              (entry._2.asInstanceOf[Wall].boundary intersectsWith dragBoundary) &&
+              ((doors && entry._2.isInstanceOf[Door]) || (!doors && !(entry._2.isInstanceOf[Door])))
 
             )
         )
@@ -122,7 +157,8 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
         val toRemove = map.areaMap.foreground.filter(
           (entry: (_, Entity)) => (
             (entry._2.isInstanceOf[Wall]) &&
-              (entry._2.asInstanceOf[Wall].boundary intersectsWith dragBoundary)
+              (entry._2.asInstanceOf[Wall].boundary intersectsWith dragBoundary) &&
+              ((doors && entry._2.isInstanceOf[Door]) || (!doors && !(entry._2.isInstanceOf[Door])))
 
             )
         )
@@ -134,7 +170,8 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
         val toRemove = map.areaMap.overlay.filter(
           (entry: (_, Entity)) => (
             (entry._2.isInstanceOf[Wall]) &&
-              (entry._2.asInstanceOf[Wall].boundary intersectsWith dragBoundary)
+              (entry._2.asInstanceOf[Wall].boundary intersectsWith dragBoundary) &&
+              ((doors && entry._2.isInstanceOf[Door]) || (!doors && !(entry._2.isInstanceOf[Door])))
 
             )
         )
@@ -156,7 +193,7 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
         val toRemove = map.areaMap.background.filter(
           (entry: (_, Entity)) => (
             !(entry._2.isInstanceOf[Wall]) &&
-              (Rect(entry._2.location, entry._2.location + SimpleVector(1,-1)) intersectsWith dragBoundary)
+              (Rect(entry._2.location, entry._2.location + SimpleVector(1, -1)) intersectsWith dragBoundary)
             )
         )
         toRemove.foreach(_ match {
@@ -166,7 +203,7 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
         val toRemove = map.areaMap.foreground.filter(
           (entry: (_, Entity)) => (
             !(entry._2.isInstanceOf[Wall]) &&
-              (Rect(entry._2.location, entry._2.location + SimpleVector(1,-1)) intersectsWith dragBoundary)
+              (Rect(entry._2.location, entry._2.location + SimpleVector(1, -1)) intersectsWith dragBoundary)
             )
         )
         toRemove.foreach(_ match {
@@ -177,7 +214,7 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
         val toRemove = map.areaMap.overlay.filter(
           (entry: (_, Entity)) => (
             !(entry._2.isInstanceOf[Wall]) &&
-              !(Rect(entry._2.location, entry._2.location + SimpleVector(1,-1)) intersectsWith dragBoundary)
+              !(Rect(entry._2.location, entry._2.location + SimpleVector(1, -1)) intersectsWith dragBoundary)
             )
         )
         toRemove.foreach(_ match {
@@ -186,6 +223,20 @@ class MapBuilderPanel(val map: MapEditPanel) extends BorderPanel {
 
     }
 
+  }
+
+  def getMapName(): String = {
+    val text0 = new JTextField(10)
+
+    val panel = new JPanel(new GridLayout(0, 2))
+    panel.add(new JLabel("Map to which this door leads: "))
+    panel.add(text0)
+
+    val result = JOptionPane.showConfirmDialog(null, panel, "Data Entry", JOptionPane.OK_CANCEL_OPTION)
+    if (result == JOptionPane.OK_OPTION) {
+      return text0.getText
+    }
+    return null
   }
 
 }

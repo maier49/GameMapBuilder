@@ -1,7 +1,8 @@
 package main.scala.graphics.images
 
-import java.awt.Image
+import java.awt.{Graphics, Image}
 import java.awt.image.BufferedImage
+import main.scala.geometry.SimpleVector
 
 /**
  * Created with IntelliJ IDEA.
@@ -15,4 +16,9 @@ case class SimpleImageRef(jImage : String, store : ImageStore) extends MyImageRe
     case Some(image) => image
     case None => new BufferedImage(1,1,BufferedImage.TYPE_INT_ARGB)
   }
+
+  override def draw(graphics: Graphics, location: SimpleVector) {
+      graphics.drawImage(image, location.x, location.y, null)
+  }
+
 }

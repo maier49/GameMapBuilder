@@ -1,7 +1,8 @@
 package main.scala.graphics.images
 
-import java.awt.Image
+import java.awt.{Graphics, Image}
 import java.awt
+import main.scala.geometry.SimpleVector
 
 /**
  * Created with IntelliJ IDEA.
@@ -11,5 +12,12 @@ import java.awt
  * To change this template use File | Settings | File Templates.
  */
 abstract class MyImageRef {
-  def image : awt.Image
+  def image: awt.Image
+
+  /**
+   * An alternative to returning the image, this image simply renders itself onto the provided graphics object.
+   * This can be much more memory efficient, particularly in the case of tiled images representing a large area
+   * @param graphics
+   */
+  def draw(graphics: Graphics, location: SimpleVector)
 }

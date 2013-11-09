@@ -1,8 +1,9 @@
 package main.scala.gameControl
 
-import java.awt.Image
+import java.awt.{Graphics, Image}
 import scala.collection.mutable
 import main.scala.gameControl.events.{EventQueue, MyEvent}
+import main.scala.geometry.SimpleVector
 
 /**
  * Basic trait which defines the necessary elements of a game screen.
@@ -11,7 +12,7 @@ import main.scala.gameControl.events.{EventQueue, MyEvent}
  *
  */
 trait GameScreen {
-  def draw: Image
+  def draw(graphics: Graphics, resolution: SimpleVector)
   def update()
   def addEventToQueue(event: MyEvent) = EventQueue.enqueue(event)
 

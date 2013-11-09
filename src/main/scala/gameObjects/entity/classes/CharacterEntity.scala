@@ -5,15 +5,16 @@ import main.scala.gameObjects.entity.traits.collisions.{BinarySearchCollisionRes
 import main.scala.graphics.images.{SectionImageRef, DefaultImageStore, ImageStore, MyImageRef}
 import main.scala.geometry.{Rect, SimpleVector}
 import main.scala.gameObjects.entity.CollisionPriority
-import java.awt.Image
+import java.awt.{Graphics, Image}
 import main.scala.gameObjects.entity.traits.Visible
 import main.scala.GameConstants
+import java.util.UUID
 
 
 /**
  * Defines properties unique to a player  entity
  */
-class CharacterEntity(private var _playerImageId: String, imageStore: ImageStore = DefaultImageStore) extends Entity(SimpleVector(0, 0)) with Visible with BinarySearchCollisionResolution {
+class CharacterEntity(private var _playerImageId: String, imageStore: ImageStore = DefaultImageStore, characterId: String = UUID.randomUUID().toString) extends Entity(SimpleVector(0, 0), characterId) with Visible with BinarySearchCollisionResolution {
   var animationSequenceCount = 0
 
   def playerImageId = _playerImageId
@@ -65,6 +66,18 @@ class CharacterEntity(private var _playerImageId: String, imageStore: ImageStore
       SimpleVector(offsetX + animationFrameSize, offsetY - directionImageSetSize),
       imageStore
     ).image
+  }
+
+  override def draw(graphics: Graphics, adjustedLocation: SimpleVector) {
+    val offsetY = playerImageHeight - (directionImageSetSize * direction)
+    val offsetX = animationFrameSize * animationSequenceIndex
+    animationSequenceCount = (animationSequenceCount + 1) % (3 * framesPerAnimation)
+    SectionImageRef(
+      playerImageId,
+      SimpleVector(offsetX, offsetY),
+      SimpleVector(offsetX + animationFrameSize, offsetY - directionImageSetSize),
+      imageStore
+    ).draw(graphics, adjustedLocation)
   }
 
   override def boundary = {
